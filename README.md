@@ -175,6 +175,134 @@ Cada linha é a mediana de 3 medições. Variação = (maior − menor throughpu
 | websocket | 16 | 601 | ±1% | 601,308 | 25.44 | 37.54 | 50.43 | 65.92 | 365.4 KB | 0 |
 | websocket | 64 | 580 | ±4% | 579,978 | 108.61 | 124.61 | 141.95 | 175.74 | 365.4 KB | 0 |
 
+## gRPC em detalhe
+
+Além dos três RPCs usados no benchmark, o serviço gRPC tem exemplos dos outros dois tipos de chamada, interceptors de autenticação e métricas, health check e reflection. Tudo coberto por testes que usam o transporte in-process do gRPC, sem abrir porta ([`ProductGrpcServiceTest`](server/src/test/java/br/com/diegobraun/protocolbench/server/grpc/ProductGrpcServiceTest.java)).
+
+### Anatomia do `.proto`
+
+O [`product.proto`](api/src/main/proto/product.proto) não é código de nenhuma linguagem. É uma IDL (*Interface Definition Language*): descreve mensagens e serviços de forma neutra, e o compilador `protoc` gera as classes para Java, Go, Python, TypeScript etc. A sintaxe lembra TypeScript ou C só porque também é declarativa e usa chaves.
+
+```proto
+syntax = "proto3";                                          // versão da linguagem
+package protocolbench;                                      // namespace no fio (protocolbench.ProductService)
+option java_package = "br.com.diegobraun.protocolbench.api.grpc";   // pacote das classes Java geradas
+
+message Product {                                           // vira a classe Product (imutável, com builder)
+  int64 id = 1;                                             // tipo, nome, NÚMERO DO CAMPO
+  string name = 2;
+  repeated string tags = 6;                                 // repeated = lista
+  string created_at = 8;                                    // snake_case vira getCreatedAt() em Java
+}
+```
+
+**O `= 1` não é valor padrão, é o número do campo.** É ele que vai para o fio, não o nome. Um produto com `id = 42` e `name = "Lamp"` é codificado assim:
+
+```
+08 2A              campo 1 (id), tipo varint, valor 42
+12 04 4C 61 6D 70  campo 2 (name), tipo "tamanho + bytes", 4 bytes: "Lamp"
+```
+
+São 8 bytes, contra 23 do JSON `{"id":42,"name":"Lamp"}`. O primeiro byte de cada campo é `(número << 3) | tipo`: `08` = campo 1 varint, `12` = campo 2 com tamanho. Números de 1 a 15 cabem num único byte de cabeçalho, por isso os campos mais usados ficam neles.
+
+Como o nome não trafega, as regras de evolução giram em torno dos números:
+
+- **Adicionar campo é seguro.** Um cliente antigo ignora o número que não conhece, e um cliente novo que lê uma mensagem antiga recebe o valor padrão (`0`, `""`, `false`, lista vazia).
+- **Renomear campo é seguro no fio**, mas quebra o código de quem usa as classes geradas.
+- **Nunca mude o tipo nem reutilize o número de um campo.** Para remover um campo, marque o número como `reserved 9;` e ninguém poderá reutilizá-lo por engano.
+- **Em proto3 não existe `null` para escalares.** `0` e "não enviado" são iguais. Se a diferença importar, declare o campo como `optional int32 stock = 7;` e use `hasStock()`.
+
+| Tipo proto | Java | Observação |
+|---|---|---|
+| `int32`, `int64` | `int`, `long` | varint: números pequenos ocupam menos bytes |
+| `double`, `float` | `double`, `float` | sempre 8 e 4 bytes |
+| `bool` | `boolean` | |
+| `string`, `bytes` | `String`, `ByteString` | |
+| `repeated T` | `List<T>` | |
+| outra `message` | classe gerada | mensagens podem ser aninhadas |
+
+O `service` descreve as chamadas, e a palavra `stream` define o tipo de cada uma:
+
+```proto
+service ProductService {
+  rpc GetProduct(GetProductRequest) returns (Product);                   // unary
+  rpc StreamProducts(StreamProductsRequest) returns (stream Product);    // server streaming
+  rpc UploadProducts(stream Product) returns (UploadSummary);            // client streaming
+  rpc QuotePrices(stream PriceQuoteRequest) returns (stream PriceQuote); // bidirecional
+}
+```
+
+No build (`mvn compile` no módulo `api`), o plugin gera em `api/target/generated-sources/protobuf`:
+
+```java
+Product product = Product.newBuilder().setId(42).setName("Lamp").build();
+byte[] bytes = product.toByteArray();
+Product copy = Product.parseFrom(bytes);
+
+ProductServiceGrpc.ProductServiceBlockingStub stub = ProductServiceGrpc.newBlockingStub(channel);
+ProductServiceGrpc.ProductServiceImplBase base;
+```
+
+### Os quatro tipos de chamada
+
+| Tipo | RPC | Uso típico | Implementação |
+|---|---|---|---|
+| Unary | `GetProduct`, `ListProducts` | Requisição e resposta, como REST | `onNext` + `onCompleted` |
+| Server streaming | `StreamProducts` | Exportar dados, feeds, resultados parciais | vários `onNext` + `onCompleted` |
+| Client streaming | `UploadProducts` | Upload em lote, ingestão de métricas | o servidor devolve um `StreamObserver` e responde no `onCompleted` do cliente |
+| Bidirecional | `QuotePrices` | Chat, cotações, sincronização | os dois lados enviam quando quiserem pela mesma chamada |
+
+Em [`ProductGrpcService`](server/src/main/java/br/com/diegobraun/protocolbench/server/grpc/ProductGrpcService.java):
+
+- **`UploadProducts`** recebe produtos um a um, rejeita os que vêm sem nome ou com preço zero e, quando o cliente fecha o stream, responde com o total aceito, rejeitado e o valor em estoque.
+- **`QuotePrices`** responde cada pedido de cotação assim que ele chega, sem esperar os próximos. O teste confirma isso enviando um pedido, esperando a resposta e só então enviando o seguinte. Uma quantidade inválida encerra a chamada com `INVALID_ARGUMENT`.
+
+### Interceptors
+
+Interceptors fazem para o gRPC o que filtros fazem para HTTP. O servidor encadeia dois ao redor do `ProductService`:
+
+```java
+ServerInterceptors.intercept(new ProductGrpcService(), authInterceptor, metricsInterceptor)
+```
+
+O último da lista é executado primeiro. Assim as métricas veem inclusive as chamadas que a autenticação rejeita.
+
+- **[`GrpcAuthInterceptor`](server/src/main/java/br/com/diegobraun/protocolbench/server/grpc/GrpcAuthInterceptor.java)** lê o header `authorization: Bearer <token>` dos `Metadata` da chamada. Se o token não existir, encerra com `UNAUTHENTICATED` antes de chegar ao serviço. Se existir, grava o nome do cliente no `Context` do gRPC, que acompanha a chamada até o serviço: `UploadProducts` usa isso para preencher `uploaded_by`. A autenticação fica desligada enquanto nenhum cliente estiver configurado:
+
+  ```yaml
+  grpc:
+    auth:
+      clients:
+        inventory-service: token-do-inventory
+        benchmark: token-do-benchmark
+  ```
+
+  No cliente, o token vai num interceptor de cliente (`MetadataUtils.newAttachHeadersInterceptor`). No gerador de carga basta passar `-Dgrpc.client.token=token-do-benchmark`.
+
+- **[`GrpcMetricsInterceptor`](server/src/main/java/br/com/diegobraun/protocolbench/server/grpc/GrpcMetricsInterceptor.java)** envolve o `ServerCall` e, no `close`, registra método, status e duração. O resultado fica exposto em HTTP:
+
+  ```bash
+  curl localhost:8080/api/grpc/metrics
+  # [{"method":"GetProduct","status":"OK","count":5225,"avgMs":0.04,"maxMs":6.55},
+  #  {"method":"GetProduct","status":"UNAUTHENTICATED","count":83,"avgMs":0.02,"maxMs":0.2}]
+  ```
+
+  Num sistema real, esse papel seria de Micrometer ou OpenTelemetry, que já têm interceptors prontos. Aqui ele foi escrito à mão para mostrar o mecanismo.
+
+Os resultados publicados foram medidos antes de os interceptors existirem. Uma rodada posterior só de gRPC, já com eles, ficou entre 0% e 10% abaixo dos números da tabela (ex.: `single` com c=64 foi de 50,9k para 45,7k req/s; `stream` com c=1 ficou igual). Como a máquina não estava no mesmo estado, essa diferença não isola o custo dos interceptors: seria preciso um A/B na mesma sessão.
+
+### Health check e reflection
+
+O servidor registra o [health check padrão do gRPC](https://grpc.io/docs/guides/health-checking/), usado por Kubernetes e load balancers, e o serviço de reflection. Com a reflection dá para chamar o servidor com o [grpcurl](https://github.com/fullstorydev/grpcurl) sem ter o `.proto`:
+
+```bash
+grpcurl -plaintext localhost:9090 list
+grpcurl -plaintext -d '{"id": 42}' localhost:9090 protocolbench.ProductService/GetProduct
+grpcurl -plaintext -d '{"product_id": 42, "quantity": 3} {"product_id": 7, "quantity": 1}' \
+  localhost:9090 protocolbench.ProductService/QuotePrices
+grpcurl -plaintext -d '{"service": "protocolbench.ProductService"}' localhost:9090 grpc.health.v1.Health/Check
+```
+
 ## Como a medição funciona
 
 - **Carga em loop fechado.** Cada worker é uma virtual thread que envia uma requisição, espera a resposta completa, registra a latência e envia a próxima. Com `c` workers há sempre no máximo `c` requisições em andamento. Isso mede a capacidade do sistema, não o comportamento sob uma taxa de chegada fixa.
@@ -200,7 +328,7 @@ Benchmark de protocolo é fácil de interpretar errado. Os números aqui compara
 ```
 protocol-benchmark
 ├── api/      Product, catálogo determinístico e contrato .proto (gera o código gRPC)
-├── server/   Spring Boot: REST, SSE, GraphQL, WebSocket (porta 8080) e gRPC (porta 9090)
+├── server/   Spring Boot: REST, SSE, GraphQL, WebSocket (porta 8080) e gRPC com interceptors, health e reflection (porta 9090)
 └── bench/    gerador de carga: um cliente por protocolo, runner com HdrHistogram e relatórios
 ```
 

@@ -1,6 +1,7 @@
 package br.com.diegobraun.protocolbench.bench;
 
 import br.com.diegobraun.protocolbench.api.ProductCatalog;
+import br.com.diegobraun.protocolbench.api.grpc.ProductServiceGrpc;
 import br.com.diegobraun.protocolbench.bench.client.CallResult;
 import br.com.diegobraun.protocolbench.bench.client.Clients;
 import br.com.diegobraun.protocolbench.bench.client.GrpcClient;
@@ -8,6 +9,11 @@ import br.com.diegobraun.protocolbench.bench.client.ProtocolClient;
 import br.com.diegobraun.protocolbench.bench.report.ReportWriter;
 import br.com.diegobraun.protocolbench.server.ServerApplication;
 import br.com.diegobraun.protocolbench.server.grpc.GrpcServerLifecycle;
+import io.grpc.ManagedChannel;
+import io.grpc.health.v1.HealthCheckRequest;
+import io.grpc.health.v1.HealthCheckResponse;
+import io.grpc.health.v1.HealthGrpc;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -17,6 +23,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -82,6 +92,27 @@ class ProtocolIntegrationTest {
             assertThat(result.items()).isEqualTo(200);
             assertThat(result.firstName()).isEqualTo(ProductCatalog.get(1).name());
         }
+    }
+
+    @Test
+    void grpcServerReportsHealthAndExposesMetricsOverHttp() throws Exception {
+        ManagedChannel channel = NettyChannelBuilder.forAddress("localhost", target.grpcPort()).usePlaintext().build();
+        try {
+            HealthCheckResponse health = HealthGrpc.newBlockingStub(channel)
+                    .check(HealthCheckRequest.newBuilder().setService(ProductServiceGrpc.SERVICE_NAME).build());
+            assertThat(health.getStatus()).isEqualTo(HealthCheckResponse.ServingStatus.SERVING);
+        } finally {
+            channel.shutdownNow();
+        }
+
+        try (GrpcClient client = new GrpcClient(target)) {
+            client.openSession().execute(Scenario.SINGLE, 1, 1);
+        }
+        HttpResponse<String> metrics = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(target.httpBaseUrl() + "/api/grpc/metrics")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(metrics.statusCode()).isEqualTo(200);
+        assertThat(metrics.body()).contains("\"method\":\"GetProduct\"", "\"status\":\"OK\"");
     }
 
     @Test

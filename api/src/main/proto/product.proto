@@ -32,8 +32,30 @@ message StreamProductsRequest {
   int32 count = 1;
 }
 
+message UploadSummary {
+  int32 accepted = 1;
+  int32 rejected = 2;
+  double total_value = 3;
+  string uploaded_by = 4;
+}
+
+message PriceQuoteRequest {
+  int64 product_id = 1;
+  int32 quantity = 2;
+}
+
+message PriceQuote {
+  int64 product_id = 1;
+  int32 quantity = 2;
+  double unit_price = 3;
+  double total = 4;
+  bool in_stock = 5;
+}
+
 service ProductService {
   rpc GetProduct(GetProductRequest) returns (Product);
   rpc ListProducts(ListProductsRequest) returns (ProductList);
   rpc StreamProducts(StreamProductsRequest) returns (stream Product);
+  rpc UploadProducts(stream Product) returns (UploadSummary);
+  rpc QuotePrices(stream PriceQuoteRequest) returns (stream PriceQuote);
 }

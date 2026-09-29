@@ -8,8 +8,12 @@ import br.com.diegobraun.protocolbench.api.grpc.ProductServiceGrpc;
 import br.com.diegobraun.protocolbench.api.grpc.StreamProductsRequest;
 import br.com.diegobraun.protocolbench.bench.Scenario;
 import br.com.diegobraun.protocolbench.bench.Target;
+import io.grpc.Channel;
+import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 
 import java.util.Iterator;
@@ -44,8 +48,18 @@ public final class GrpcClient implements ProtocolClient {
             builder.directExecutor();
         }
         this.channel = builder.build();
-        this.stub = ProductServiceGrpc.newBlockingStub(channel);
-        this.asyncStub = ProductServiceGrpc.newStub(channel);
+        Channel intercepted = withToken(channel, System.getProperty("grpc.client.token"));
+        this.stub = ProductServiceGrpc.newBlockingStub(intercepted);
+        this.asyncStub = ProductServiceGrpc.newStub(intercepted);
+    }
+
+    private static Channel withToken(Channel channel, String token) {
+        if (token == null || token.isBlank()) {
+            return channel;
+        }
+        Metadata metadata = new Metadata();
+        metadata.put(Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER), "Bearer " + token);
+        return ClientInterceptors.intercept(channel, MetadataUtils.newAttachHeadersInterceptor(metadata));
     }
 
     @Override
