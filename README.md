@@ -75,21 +75,21 @@ Os testes sobem o servidor em portas aleatórias e verificam que todos os protoc
 
 Rodada completa com as opções padrão (concorrência 1/16/64, warmup de 5 s, mediana de 3 medições de 5 s), cliente e servidor no mesmo MacBook (Apple Silicon, 10 CPUs, JDK 25). Relatório interativo em [`results/report.html`](results/report.html) e dados brutos em [`results/results.json`](results/results.json).
 
-> A máquina não estava ociosa (load average 45 no início, com navegador e uma VM abertos). A coluna **variação** mostra a dispersão entre as 3 medições: quase tudo ficou abaixo de ±10%, mas WebSocket `single` com c=1 e c=16 oscilou muito (±96% e ±141%). Em rodadas anteriores, com a máquina menos carregada, esses dois casos deram ~17k e ~63k req/s. Para números de referência, rode em máquinas dedicadas.
+A coluna **variação** mostra a dispersão entre as 3 medições de cada linha. Nesta rodada ficou em ±6% ou menos em todos os casos. Numa rodada anterior, com navegador e VM disputando CPU, alguns casos passaram de ±100%, por isso vale sempre olhar essa coluna antes de comparar números.
 
 ### O que os números mostram
 
 **Payload.** Protobuf é ~22% menor que JSON nos mesmos dados (295 B contra 377 B por produto; 28,6 KB contra 36,4 KB por lista de 100). O ganho vem de não repetir o nome dos campos e de codificar números em binário. O GraphQL é ligeiramente maior que o REST por causa do envelope `{"data": {...}}`.
 
-**`single`: overhead por requisição.** Com o payload pequeno, o que pesa é o custo fixo de cada chamada. O WebSocket, com a conexão já aberta, só troca um frame em cada direção, sem parsear linha de requisição e headers HTTP, e chega a ~60k req/s com c=64. O gRPC vem em seguida (46k), à frente do REST (29k) e do GraphQL (25k), porque multiplexa tudo numa conexão HTTP/2 com headers comprimidos (HPACK).
+**`single`: overhead por requisição.** Com o payload pequeno, o que pesa é o custo fixo de cada chamada. O WebSocket, com a conexão já aberta, só troca um frame em cada direção, sem parsear linha de requisição e headers HTTP, e chega a ~74k req/s com c=64 e p99 abaixo de 2 ms. O gRPC vem em seguida (51k), à frente do REST (31k) e do GraphQL (27k), porque multiplexa tudo numa conexão HTTP/2 com headers comprimidos (HPACK).
 
-**`list`: custo de serialização.** Com 36 KB por resposta, serializar e desserializar domina. Com c=1, o gRPC faz 1,5x mais requisições que o REST, com metade da latência p99 (0,44 ms contra 0,76 ms). Com c=64 a diferença cai (23k contra 19k req/s), porque os dois ficam limitados pela CPU compartilhada entre cliente e servidor. O **GraphQL fica em 55–60% do throughput do REST**: a engine resolve cada campo de cada objeto individualmente (100 produtos × 8 campos = 800 resoluções por resposta). É o preço da flexibilidade de escolher campos.
+**`list`: custo de serialização.** Com 36 KB por resposta, serializar e desserializar domina. O gRPC faz ~1,6x mais requisições que o REST em todos os níveis de concorrência (5,9k contra 3,8k com c=1; 31,9k contra 20,1k com c=64), com latência p99 entre 40% e 60% da do REST. Gerar e ler Protobuf é bem mais barato que JSON. O WebSocket fica um pouco abaixo do REST: o payload é o mesmo JSON, e a vantagem de não ter overhead HTTP some quando a serialização domina. O **GraphQL fica em ~60% do throughput do REST**: a engine resolve cada campo de cada objeto individualmente (100 produtos × 8 campos = 800 resoluções por resposta). É o preço da flexibilidade de escolher campos.
 
-**`stream`: mensagens pequenas em sequência.** O gRPC entrega ~900 mil itens por segundo com um único cliente, 4,4x o SSE e 5,8x o WebSocket. O HTTP/2 do gRPC agrupa várias mensagens por escrita no socket. O SSE (`flush` a cada evento) e o WebSocket (um frame por mensagem) pagam uma chamada de sistema por item e mais o parse de JSON.
+**`stream`: mensagens pequenas em sequência.** O gRPC entrega ~900 mil itens por segundo com um único cliente, 4,3x o SSE e 5,8x o WebSocket, com a menor latência de cauda em todas as concorrências. O HTTP/2 do gRPC agrupa várias mensagens por escrita no socket. O SSE (`flush` a cada evento) e o WebSocket (um frame por mensagem) pagam uma chamada de sistema por item e mais o parse de JSON.
 
 ### A implementação importa tanto quanto o protocolo
 
-A primeira versão do cliente gRPC usava o blocking stub padrão e ficou em último lugar no stream. Ajustes no cliente mudaram completamente o resultado:
+A primeira versão do cliente gRPC usava o blocking stub padrão e ficou em último lugar no stream. Ajustes no cliente mudaram completamente o resultado (streams/s, medições exploratórias feitas durante o desenvolvimento):
 
 | Cliente gRPC (cenário `stream`, N = 1000) | c=1 | c=16 | c=64 |
 |---|---:|---:|---:|
@@ -99,7 +99,7 @@ A primeira versão do cliente gRPC usava o blocking stub padrão e ficou em últ
 
 O blocking stub pede uma mensagem por vez e cada uma passa por duas trocas de thread (event loop do Netty → executor → thread que itera). Com `directExecutor()` os callbacks rodam direto no event loop, o que é seguro quando eles não bloqueiam, como aqui. O ganho foi de 10x sem mudar nada no protocolo.
 
-O mesmo ajuste no **servidor** é uma troca, não um ganho geral. Por isso ficou de fora:
+O mesmo ajuste no **servidor** é uma troca, não um ganho geral. Por isso ficou de fora (medições exploratórias):
 
 | Servidor gRPC com `directExecutor()` | Padrão | Direct |
 |---|---:|---:|
@@ -125,49 +125,49 @@ Cada linha é a mediana de 3 medições. Variação = (maior − menor throughpu
 
 | Protocolo | Concorrência | req/s | variação | itens/s | p50 (ms) | p90 (ms) | p99 (ms) | max (ms) | payload | erros |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| rest | 1 | 10,005 | ±9% | 10,005 | 0.09 | 0.12 | 0.32 | 11.50 | 377 B | 0 |
-| rest | 16 | 30,522 | ±8% | 30,522 | 0.49 | 0.71 | 1.38 | 15.50 | 377 B | 0 |
-| rest | 64 | 29,287 | ±7% | 29,287 | 1.92 | 3.42 | 5.70 | 15.22 | 377 B | 0 |
-| graphql | 1 | 6,842 | ±2% | 6,842 | 0.14 | 0.17 | 0.32 | 4.78 | 400 B | 0 |
-| graphql | 16 | 24,510 | ±12% | 24,510 | 0.61 | 0.92 | 1.53 | 10.69 | 400 B | 0 |
-| graphql | 64 | 24,558 | ±4% | 24,558 | 2.29 | 3.93 | 7.50 | 35.90 | 400 B | 0 |
-| grpc | 1 | 7,292 | ±17% | 7,292 | 0.10 | 0.19 | 0.84 | 44.48 | 295 B | 0 |
-| grpc | 16 | 37,665 | ±9% | 37,665 | 0.38 | 0.51 | 1.20 | 55.87 | 295 B | 0 |
-| grpc | 64 | 45,889 | ±1% | 45,889 | 1.30 | 1.79 | 3.29 | 22.85 | 295 B | 0 |
-| websocket | 1 | 4,872 | ±96% | 4,872 | 0.10 | 0.35 | 1.93 | 19.79 | 377 B | 0 |
-| websocket | 16 | 15,198 | ±141% | 15,198 | 0.41 | 2.48 | 8.68 | 67.33 | 377 B | 0 |
-| websocket | 64 | 59,586 | ±11% | 59,586 | 0.88 | 1.60 | 3.91 | 77.63 | 377 B | 0 |
+| rest | 1 | 10,823 | ±3% | 10,823 | 0.08 | 0.11 | 0.20 | 4.15 | 377 B | 0 |
+| rest | 16 | 32,032 | ±2% | 32,032 | 0.48 | 0.68 | 1.12 | 8.35 | 377 B | 0 |
+| rest | 64 | 30,621 | ±3% | 30,621 | 1.82 | 3.28 | 5.76 | 36.48 | 377 B | 0 |
+| graphql | 1 | 7,147 | ±2% | 7,147 | 0.13 | 0.16 | 0.27 | 3.95 | 400 B | 0 |
+| graphql | 16 | 27,195 | ±0% | 27,195 | 0.56 | 0.80 | 1.21 | 4.05 | 400 B | 0 |
+| graphql | 64 | 26,878 | ±4% | 26,878 | 2.16 | 3.71 | 5.33 | 12.41 | 400 B | 0 |
+| grpc | 1 | 13,000 | ±5% | 13,000 | 0.07 | 0.09 | 0.13 | 2.00 | 295 B | 0 |
+| grpc | 16 | 43,049 | ±1% | 43,049 | 0.36 | 0.46 | 0.60 | 1.56 | 295 B | 0 |
+| grpc | 64 | 50,894 | ±0% | 50,894 | 1.22 | 1.60 | 1.97 | 4.12 | 295 B | 0 |
+| websocket | 1 | 18,209 | ±1% | 18,209 | 0.05 | 0.07 | 0.09 | 0.87 | 377 B | 0 |
+| websocket | 16 | 65,778 | ±1% | 65,778 | 0.23 | 0.34 | 0.50 | 13.79 | 377 B | 0 |
+| websocket | 64 | 73,769 | ±0% | 73,769 | 0.79 | 1.32 | 1.78 | 5.22 | 377 B | 0 |
 
 ### list — Listar N produtos numa única resposta (N = 100)
 
 | Protocolo | Concorrência | req/s | variação | itens/s | p50 (ms) | p90 (ms) | p99 (ms) | max (ms) | payload | erros |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| rest | 1 | 3,566 | ±5% | 356,558 | 0.26 | 0.32 | 0.76 | 6.21 | 36.4 KB | 0 |
-| rest | 16 | 18,747 | ±4% | 1,874,654 | 0.78 | 1.22 | 2.00 | 15.90 | 36.4 KB | 0 |
-| rest | 64 | 19,377 | ±1% | 1,937,724 | 2.83 | 5.32 | 8.82 | 25.82 | 36.4 KB | 0 |
-| graphql | 1 | 1,999 | ±1% | 199,884 | 0.48 | 0.54 | 1.06 | 4.24 | 36.6 KB | 0 |
-| graphql | 16 | 11,158 | ±9% | 1,115,820 | 1.30 | 2.04 | 3.80 | 47.74 | 36.6 KB | 0 |
-| graphql | 64 | 10,809 | ±4% | 1,080,904 | 5.32 | 9.07 | 16.37 | 51.42 | 36.6 KB | 0 |
-| grpc | 1 | 5,328 | ±0% | 532,811 | 0.17 | 0.22 | 0.44 | 5.10 | 28.6 KB | 0 |
-| grpc | 16 | 23,460 | ±3% | 2,345,969 | 0.61 | 0.92 | 1.99 | 12.24 | 28.6 KB | 0 |
-| grpc | 64 | 23,014 | ±10% | 2,301,358 | 2.50 | 3.73 | 7.87 | 62.46 | 28.6 KB | 0 |
-| websocket | 1 | 2,527 | ±9% | 252,733 | 0.36 | 0.44 | 0.98 | 21.01 | 36.4 KB | 0 |
-| websocket | 16 | 13,003 | ±10% | 1,300,252 | 1.01 | 1.84 | 5.11 | 46.56 | 36.4 KB | 0 |
-| websocket | 64 | 14,786 | ±2% | 1,478,603 | 3.83 | 6.58 | 13.60 | 130.37 | 36.4 KB | 0 |
+| rest | 1 | 3,759 | ±2% | 375,933 | 0.26 | 0.30 | 0.44 | 1.42 | 36.4 KB | 0 |
+| rest | 16 | 19,585 | ±1% | 1,958,479 | 0.77 | 1.15 | 1.64 | 6.50 | 36.4 KB | 0 |
+| rest | 64 | 20,145 | ±4% | 2,014,516 | 2.77 | 5.12 | 7.92 | 17.33 | 36.4 KB | 0 |
+| graphql | 1 | 2,079 | ±3% | 207,911 | 0.46 | 0.51 | 0.91 | 2.33 | 36.6 KB | 0 |
+| graphql | 16 | 12,321 | ±1% | 1,232,076 | 1.22 | 1.83 | 2.63 | 15.02 | 36.6 KB | 0 |
+| graphql | 64 | 12,068 | ±1% | 1,206,846 | 4.91 | 8.06 | 12.64 | 45.73 | 36.6 KB | 0 |
+| grpc | 1 | 5,912 | ±3% | 591,192 | 0.16 | 0.18 | 0.25 | 1.36 | 28.6 KB | 0 |
+| grpc | 16 | 28,551 | ±1% | 2,855,100 | 0.55 | 0.70 | 0.92 | 1.91 | 28.6 KB | 0 |
+| grpc | 64 | 31,898 | ±1% | 3,189,773 | 1.97 | 2.60 | 3.27 | 5.02 | 28.6 KB | 0 |
+| websocket | 1 | 2,892 | ±2% | 289,239 | 0.34 | 0.37 | 0.45 | 11.94 | 36.4 KB | 0 |
+| websocket | 16 | 16,445 | ±1% | 1,644,546 | 0.89 | 1.37 | 2.37 | 20.58 | 36.4 KB | 0 |
+| websocket | 64 | 17,459 | ±0% | 1,745,906 | 3.43 | 5.62 | 8.45 | 39.87 | 36.4 KB | 0 |
 
 ### stream — Receber N produtos como stream de mensagens (N = 1000)
 
 | Protocolo | Concorrência | req/s | variação | itens/s | p50 (ms) | p90 (ms) | p99 (ms) | max (ms) | payload | erros |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| rest | 1 | 202 | ±1% | 201,739 | 4.82 | 5.11 | 8.39 | 34.98 | 373.2 KB | 0 |
-| rest | 16 | 545 | ±6% | 545,251 | 26.46 | 43.78 | 77.70 | 176.00 | 373.2 KB | 0 |
-| rest | 64 | 625 | ±2% | 624,576 | 93.82 | 165.38 | 240.00 | 318.72 | 373.2 KB | 0 |
-| grpc | 1 | 896 | ±6% | 896,282 | 1.08 | 1.20 | 1.82 | 5.32 | 285.9 KB | 0 |
-| grpc | 16 | 1,162 | ±1% | 1,161,694 | 13.62 | 16.10 | 20.34 | 31.84 | 285.9 KB | 0 |
-| grpc | 64 | 1,124 | ±3% | 1,123,544 | 55.30 | 62.75 | 82.94 | 139.52 | 285.9 KB | 0 |
-| websocket | 1 | 154 | ±1% | 154,093 | 6.36 | 6.66 | 10.42 | 15.16 | 365.4 KB | 0 |
-| websocket | 16 | 534 | ±9% | 534,170 | 27.52 | 44.67 | 78.34 | 123.52 | 365.4 KB | 0 |
-| websocket | 64 | 515 | ±6% | 515,402 | 108.42 | 144.77 | 227.58 | 5066.75 | 365.4 KB | 0 |
+| rest | 1 | 209 | ±1% | 209,335 | 4.80 | 4.98 | 5.55 | 6.06 | 373.2 KB | 0 |
+| rest | 16 | 651 | ±6% | 650,637 | 23.30 | 35.20 | 47.55 | 62.11 | 373.2 KB | 0 |
+| rest | 64 | 637 | ±1% | 637,177 | 90.94 | 166.53 | 229.63 | 279.04 | 373.2 KB | 0 |
+| grpc | 1 | 895 | ±2% | 894,825 | 1.11 | 1.20 | 1.65 | 2.50 | 285.9 KB | 0 |
+| grpc | 16 | 1,206 | ±2% | 1,206,500 | 13.13 | 15.30 | 18.30 | 52.35 | 285.9 KB | 0 |
+| grpc | 64 | 1,178 | ±1% | 1,177,640 | 53.70 | 59.97 | 71.62 | 83.33 | 285.9 KB | 0 |
+| websocket | 1 | 155 | ±2% | 155,314 | 6.36 | 6.53 | 8.24 | 21.74 | 365.4 KB | 0 |
+| websocket | 16 | 601 | ±1% | 601,308 | 25.44 | 37.54 | 50.43 | 65.92 | 365.4 KB | 0 |
+| websocket | 64 | 580 | ±4% | 579,978 | 108.61 | 124.61 | 141.95 | 175.74 | 365.4 KB | 0 |
 
 ## Como a medição funciona
 
