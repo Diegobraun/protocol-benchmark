@@ -89,15 +89,21 @@ A coluna **variação** mostra a dispersão entre as 3 medições de cada linha.
 
 ### A implementação importa tanto quanto o protocolo
 
-A primeira versão do cliente gRPC usava o blocking stub padrão e ficou em último lugar no stream. Ajustes no cliente mudaram completamente o resultado (streams/s, medições exploratórias feitas durante o desenvolvimento):
+A primeira versão do cliente gRPC usava o blocking stub padrão e ficou em último lugar no stream. Ajustes no cliente mudaram completamente o resultado (streams/s, mediana de 3 × 5 s, variação ≤ ±4%):
 
 | Cliente gRPC (cenário `stream`, N = 1000) | c=1 | c=16 | c=64 |
 |---|---:|---:|---:|
-| Blocking stub (iterator) | 66 | 159 | 152 |
-| Stub assíncrono (`StreamObserver`) | 93 | 218 | – |
-| Stub assíncrono + `directExecutor()` no canal | **896** | **1.162** | **1.124** |
+| Blocking stub (iterator) | 66 | 158 | 145 |
+| Stub assíncrono (`StreamObserver`) | 95 | 231 | 228 |
+| Stub assíncrono + `directExecutor()` no canal | **908** | **1.248** | **1.187** |
 
-O blocking stub pede uma mensagem por vez e cada uma passa por duas trocas de thread (event loop do Netty → executor → thread que itera). Com `directExecutor()` os callbacks rodam direto no event loop, o que é seguro quando eles não bloqueiam, como aqui. O ganho foi de 10x sem mudar nada no protocolo.
+O blocking stub pede uma mensagem por vez e cada uma passa por duas trocas de thread (event loop do Netty → executor → thread que itera). Com `directExecutor()` os callbacks rodam direto no event loop, o que é seguro quando eles não bloqueiam, como aqui. O ganho foi de ~14x sem mudar nada no protocolo.
+
+Os três modos continuam disponíveis para reproduzir a tabela (`direct` é o padrão):
+
+```bash
+JAVA_OPTS="-Dgrpc.client.mode=blocking" ./run-benchmark.sh --protocols=grpc --scenarios=stream
+```
 
 O mesmo ajuste no **servidor** é uma troca, não um ganho geral. Por isso ficou de fora (medições exploratórias):
 

@@ -3,6 +3,7 @@ package br.com.diegobraun.protocolbench.bench;
 import br.com.diegobraun.protocolbench.api.ProductCatalog;
 import br.com.diegobraun.protocolbench.bench.client.CallResult;
 import br.com.diegobraun.protocolbench.bench.client.Clients;
+import br.com.diegobraun.protocolbench.bench.client.GrpcClient;
 import br.com.diegobraun.protocolbench.bench.client.ProtocolClient;
 import br.com.diegobraun.protocolbench.bench.report.ReportWriter;
 import br.com.diegobraun.protocolbench.server.ServerApplication;
@@ -70,6 +71,16 @@ class ProtocolIntegrationTest {
             long json = rest.openSession().execute(Scenario.LIST, 100, 1).payloadBytes();
             long protobuf = grpc.openSession().execute(Scenario.LIST, 100, 1).payloadBytes();
             assertThat(protobuf).isLessThan(json);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(GrpcClient.Mode.class)
+    void everyGrpcClientModeReceivesTheWholeStream(GrpcClient.Mode mode) throws Exception {
+        try (GrpcClient client = new GrpcClient(target, mode)) {
+            CallResult result = client.openSession().execute(Scenario.STREAM, 200, 1);
+            assertThat(result.items()).isEqualTo(200);
+            assertThat(result.firstName()).isEqualTo(ProductCatalog.get(1).name());
         }
     }
 

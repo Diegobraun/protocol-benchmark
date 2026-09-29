@@ -12,21 +12,38 @@ import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
 
+import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 public final class GrpcClient implements ProtocolClient {
 
+    public enum Mode {
+        BLOCKING, ASYNC, DIRECT;
+
+        static Mode fromSystemProperty() {
+            return valueOf(System.getProperty("grpc.client.mode", "direct").toUpperCase());
+        }
+    }
+
+    private final Mode mode;
     private final ManagedChannel channel;
     private final ProductServiceGrpc.ProductServiceBlockingStub stub;
     private final ProductServiceGrpc.ProductServiceStub asyncStub;
 
     public GrpcClient(Target target) {
-        this.channel = NettyChannelBuilder.forAddress(target.host(), target.grpcPort())
+        this(target, Mode.fromSystemProperty());
+    }
+
+    public GrpcClient(Target target, Mode mode) {
+        this.mode = mode;
+        NettyChannelBuilder builder = NettyChannelBuilder.forAddress(target.host(), target.grpcPort())
                 .usePlaintext()
-                .directExecutor()
-                .maxInboundMessageSize(64 * 1024 * 1024)
-                .build();
+                .maxInboundMessageSize(64 * 1024 * 1024);
+        if (mode == Mode.DIRECT) {
+            builder.directExecutor();
+        }
+        this.channel = builder.build();
         this.stub = ProductServiceGrpc.newBlockingStub(channel);
         this.asyncStub = ProductServiceGrpc.newStub(channel);
     }
@@ -38,7 +55,9 @@ public final class GrpcClient implements ProtocolClient {
 
     @Override
     public String label() {
-        return "gRPC (HTTP/2 + Protobuf)";
+        return mode == Mode.DIRECT
+                ? "gRPC (HTTP/2 + Protobuf)"
+                : "gRPC (HTTP/2 + Protobuf, cliente " + mode.name().toLowerCase() + ")";
     }
 
     @Override
@@ -63,8 +82,23 @@ public final class GrpcClient implements ProtocolClient {
                 String firstName = list.getProductsCount() == 0 ? null : list.getProducts(0).getName();
                 yield new CallResult(list.getProductsCount(), list.getSerializedSize(), firstName);
             }
-            case STREAM -> stream(size);
+            case STREAM -> mode == Mode.BLOCKING ? blockingStream(call, size) : stream(size);
         };
+    }
+
+    private static CallResult blockingStream(ProductServiceGrpc.ProductServiceBlockingStub call, int size) {
+        Iterator<Product> iterator = call.streamProducts(StreamProductsRequest.newBuilder().setCount(size).build());
+        int items = 0;
+        long bytes = 0;
+        String firstName = null;
+        while (iterator.hasNext()) {
+            Product product = iterator.next();
+            bytes += product.getSerializedSize();
+            if (items++ == 0) {
+                firstName = product.getName();
+            }
+        }
+        return new CallResult(items, bytes, firstName);
     }
 
     private CallResult stream(int size) throws Exception {
