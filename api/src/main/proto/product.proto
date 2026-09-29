@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package protocolbench;
+
+option java_multiple_files = true;
+option java_package = "br.com.diegobraun.protocolbench.api.grpc";
+
+message Product {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  string category = 5;
+  repeated string tags = 6;
+  int32 stock = 7;
+  string created_at = 8;
+}
+
+message GetProductRequest {
+  int64 id = 1;
+}
+
+message ListProductsRequest {
+  int32 limit = 1;
+}
+
+message ProductList {
+  repeated Product products = 1;
+}
+
+message StreamProductsRequest {
+  int32 count = 1;
+}
+
+service ProductService {
+  rpc GetProduct(GetProductRequest) returns (Product);
+  rpc ListProducts(ListProductsRequest) returns (ProductList);
+  rpc StreamProducts(StreamProductsRequest) returns (stream Product);
+}

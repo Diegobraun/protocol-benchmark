@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: protocol-benchmark-server
+  threads:
+    virtual:
+      enabled: true
+  main:
+    banner-mode: off
+
+server:
+  port: 8080
+  tomcat:
+    max-connections: 10000
+    threads:
+      max: 400
+
+grpc:
+  port: 9090
+
+logging:
+  level:
+    root: warn
+    br.com.diegobraun: info
+    org.springframework.boot.web.embedded.tomcat: info

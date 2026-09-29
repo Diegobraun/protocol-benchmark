@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protocol Benchmark</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --text: #1d1d1b;
+    --muted: #6b6b66;
+    --border: #e2e2dd;
+    --grid: #ececE7;
+    --rest: #3b6fd8;
+    --graphql: #c2418f;
+    --grpc: #2f9e6b;
+    --websocket: #d9822b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151514;
+      --surface: #1f1f1d;
+      --text: #ecece8;
+      --muted: #9a9a94;
+      --border: #33332f;
+      --grid: #2c2c29;
+      --rest: #6f97ec;
+      --graphql: #e070b3;
+      --grpc: #4cc38a;
+      --websocket: #f0a257;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 0 0 2px; }
+  .muted { color: var(--muted); }
+  .meta { font-size: 13px; margin: 0 0 24px; }
+  section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 16px 0; }
+  .chart h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--muted); }
+  .chart-box { position: relative; height: 240px; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  .err { color: #d64545; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Protocol Benchmark</h1>
+  <p class="meta muted" id="meta"></p>
+  <div id="scenarios"></div>
+</main>
+<script>
+  const report = {
+  "generatedAt" : "2026-09-29T00:56:08.562228Z",
+  "environment" : {
+    "java" : "OpenJDK 64-Bit Server VM 25.0.4",
+    "os" : "Mac OS X 26.5.1 (aarch64)",
+    "cpus" : 10,
+    "loadAverage" : 45.3
+  },
+  "config" : {
+    "target" : "localhost",
+    "warmup" : "PT5S",
+    "duration" : "PT5S",
+    "repeats" : 3,
+    "listSize" : 100,
+    "streamSize" : 1000,
+    "concurrencies" : [ 1, 16, 64 ]
+  },
+  "results" : [ {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 1,
+    "requests" : 50024,
+    "errors" : 0,
+    "throughput" : 10004.601990918316,
+    "throughputMin" : 8575.603690710554,
+    "throughputMax" : 10303.184234837026,
+    "repeats" : 3,
+    "itemsPerSecond" : 10004.601990918316,
+    "meanMs" : 0.1,
+    "p50Ms" : 0.09,
+    "p90Ms" : 0.12,
+    "p99Ms" : 0.32,
+    "maxMs" : 11.5,
+    "avgPayloadBytes" : 377,
+    "firstError" : null
+  }, {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 16,
+    "requests" : 152621,
+    "errors" : 0,
+    "throughput" : 30521.996818494852,
+    "throughputMin" : 26130.0037119266,
+    "throughputMax" : 31144.114495512928,
+    "repeats" : 3,
+    "itemsPerSecond" : 30521.996818494852,
+    "meanMs" : 0.52,
+    "p50Ms" : 0.49,
+    "p90Ms" : 0.71,
+    "p99Ms" : 1.38,
+    "maxMs" : 15.5,
+    "avgPayloadBytes" : 377,
+    "firstError" : null
+  }, {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 64,
+    "requests" : 146508,
+    "errors" : 0,
+    "throughput" : 29287.444399920874,
+    "throughputMin" : 25194.666974907756,
+    "throughputMax" : 29581.947800925544,
+    "repeats" : 3,
+    "itemsPerSecond" : 29287.444399920874,
+    "meanMs" : 2.18,
+    "p50Ms" : 1.92,
+    "p90Ms" : 3.42,
+    "p99Ms" : 5.7,
+    "maxMs" : 15.22,
+    "avgPayloadBytes" : 377,
+    "firstError" : null
+  }, {
+    "protocol" : "graphql",
+    "protocolLabel" : "GraphQL (HTTP/1.1 + JSON)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 1,
+    "requests" : 34212,
+    "errors" : 0,
+    "throughput" : 6842.234531505431,
+    "throughputMin" : 6662.623217953109,
+    "throughputMax" : 6987.590080216328,
+    "repeats" : 3,
+    "itemsPerSecond" : 6842.234531505431,
+    "meanMs" : 0.15,
+    "p50Ms" : 0.14,
+    "p90Ms" : 0.17,
+    "p99Ms" : 0.32,
+    "maxMs" : 4.78,
+    "avgPayloadBytes" : 400,
+    "firstError" : null
+  }, {
+    "protocol" : "graphql",
+    "protocolLabel" : "GraphQL (HTTP/1.1 + JSON)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 16,
+    "requests" : 122564,
+    "errors" : 0,
+    "throughput" : 24510.07468557959,
+    "throughputMin" : 19590.48967211719,
+    "throughputMax" : 25279.731434519414,
+    "repeats" : 3,
+    "itemsPerSecond" : 24510.07468557959,
+    "meanMs" : 0.65,
+    "p50Ms" : 0.61,
+    "p90Ms" : 0.92,
+    "p99Ms" : 1.53,
+    "maxMs" : 10.69,
+    "avgPayloadBytes" : 400,
+    "firstError" : null
+  }, {
+    "protocol" : "graphql",
+    "protocolLabel" : "GraphQL (HTTP/1.1 + JSON)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 64,
+    "requests" : 122832,
+    "errors" : 0,
+    "throughput" : 24557.64540569709,
+    "throughputMin" : 22861.374412671805,
+    "throughputMax" : 24810.306127953565,
+    "repeats" : 3,
+    "itemsPerSecond" : 24557.64540569709,
+    "meanMs" : 2.61,
+    "p50Ms" : 2.29,
+    "p90Ms" : 3.93,
+    "p99Ms" : 7.5,
+    "maxMs" : 35.9,
+    "avgPayloadBytes" : 400,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 1,
+    "requests" : 36463,
+    "errors" : 0,
+    "throughput" : 7292.360628262377,
+    "throughputMin" : 6778.3424618838235,
+    "throughputMax" : 9285.830501946997,
+    "repeats" : 3,
+    "itemsPerSecond" : 7292.360628262377,
+    "meanMs" : 0.14,
+    "p50Ms" : 0.1,
+    "p90Ms" : 0.19,
+    "p99Ms" : 0.84,
+    "maxMs" : 44.48,
+    "avgPayloadBytes" : 295,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 16,
+    "requests" : 188336,
+    "errors" : 0,
+    "throughput" : 37664.79478646861,
+    "throughputMin" : 32722.62288670722,
+    "throughputMax" : 39384.14527678103,
+    "repeats" : 3,
+    "itemsPerSecond" : 37664.79478646861,
+    "meanMs" : 0.42,
+    "p50Ms" : 0.38,
+    "p90Ms" : 0.51,
+    "p99Ms" : 1.2,
+    "maxMs" : 55.87,
+    "avgPayloadBytes" : 295,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 64,
+    "requests" : 229489,
+    "errors" : 0,
+    "throughput" : 45888.688800838594,
+    "throughputMin" : 45211.69149676822,
+    "throughputMax" : 46298.415608508556,
+    "repeats" : 3,
+    "itemsPerSecond" : 45888.688800838594,
+    "meanMs" : 1.39,
+    "p50Ms" : 1.3,
+    "p90Ms" : 1.79,
+    "p99Ms" : 3.29,
+    "maxMs" : 22.85,
+    "avgPayloadBytes" : 295,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 1,
+    "requests" : 24361,
+    "errors" : 0,
+    "throughput" : 4871.732191916271,
+    "throughputMin" : 1354.9038923312246,
+    "throughputMax" : 10756.835753244553,
+    "repeats" : 3,
+    "itemsPerSecond" : 4871.732191916271,
+    "meanMs" : 0.2,
+    "p50Ms" : 0.1,
+    "p90Ms" : 0.35,
+    "p99Ms" : 1.93,
+    "maxMs" : 19.79,
+    "avgPayloadBytes" : 377,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 16,
+    "requests" : 76070,
+    "errors" : 0,
+    "throughput" : 15197.971207379815,
+    "throughputMin" : 10046.67965676555,
+    "throughputMax" : 52929.50442564668,
+    "repeats" : 3,
+    "itemsPerSecond" : 15197.971207379815,
+    "meanMs" : 1.05,
+    "p50Ms" : 0.41,
+    "p90Ms" : 2.48,
+    "p99Ms" : 8.68,
+    "maxMs" : 67.33,
+    "avgPayloadBytes" : 377,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "single",
+    "size" : 1,
+    "concurrency" : 64,
+    "requests" : 298040,
+    "errors" : 0,
+    "throughput" : 59585.87576432871,
+    "throughputMin" : 54783.50011436906,
+    "throughputMax" : 68053.86358526224,
+    "repeats" : 3,
+    "itemsPerSecond" : 59585.87576432871,
+    "meanMs" : 1.07,
+    "p50Ms" : 0.88,
+    "p90Ms" : 1.6,
+    "p99Ms" : 3.91,
+    "maxMs" : 77.63,
+    "avgPayloadBytes" : 377,
+    "firstError" : null
+  }, {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 1,
+    "requests" : 17829,
+    "errors" : 0,
+    "throughput" : 3565.5809250030384,
+    "throughputMin" : 3347.812383237543,
+    "throughputMax" : 3671.969859289069,
+    "repeats" : 3,
+    "itemsPerSecond" : 356558.0925003039,
+    "meanMs" : 0.28,
+    "p50Ms" : 0.26,
+    "p90Ms" : 0.32,
+    "p99Ms" : 0.76,
+    "maxMs" : 6.21,
+    "avgPayloadBytes" : 37249,
+    "firstError" : null
+  }, {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 16,
+    "requests" : 93758,
+    "errors" : 0,
+    "throughput" : 18746.54311999338,
+    "throughputMin" : 17379.84660855178,
+    "throughputMax" : 19056.26284012248,
+    "repeats" : 3,
+    "itemsPerSecond" : 1874654.3119993382,
+    "meanMs" : 0.85,
+    "p50Ms" : 0.78,
+    "p90Ms" : 1.22,
+    "p99Ms" : 2.0,
+    "maxMs" : 15.9,
+    "avgPayloadBytes" : 37249,
+    "firstError" : null
+  }, {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 64,
+    "requests" : 96940,
+    "errors" : 0,
+    "throughput" : 19377.235139786866,
+    "throughputMin" : 19137.85973945699,
+    "throughputMax" : 19520.335234618367,
+    "repeats" : 3,
+    "itemsPerSecond" : 1937723.5139786866,
+    "meanMs" : 3.3,
+    "p50Ms" : 2.83,
+    "p90Ms" : 5.32,
+    "p99Ms" : 8.82,
+    "maxMs" : 25.82,
+    "avgPayloadBytes" : 37249,
+    "firstError" : null
+  }, {
+    "protocol" : "graphql",
+    "protocolLabel" : "GraphQL (HTTP/1.1 + JSON)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 1,
+    "requests" : 9995,
+    "errors" : 0,
+    "throughput" : 1998.8416249819911,
+    "throughputMin" : 1980.868519851995,
+    "throughputMax" : 2002.094923251305,
+    "repeats" : 3,
+    "itemsPerSecond" : 199884.16249819912,
+    "meanMs" : 0.5,
+    "p50Ms" : 0.48,
+    "p90Ms" : 0.54,
+    "p99Ms" : 1.06,
+    "maxMs" : 4.24,
+    "avgPayloadBytes" : 37471,
+    "firstError" : null
+  }, {
+    "protocol" : "graphql",
+    "protocolLabel" : "GraphQL (HTTP/1.1 + JSON)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 16,
+    "requests" : 55806,
+    "errors" : 0,
+    "throughput" : 11158.204022220034,
+    "throughputMin" : 9377.383442038437,
+    "throughputMax" : 11380.40164427215,
+    "repeats" : 3,
+    "itemsPerSecond" : 1115820.4022220033,
+    "meanMs" : 1.43,
+    "p50Ms" : 1.3,
+    "p90Ms" : 2.04,
+    "p99Ms" : 3.8,
+    "maxMs" : 47.74,
+    "avgPayloadBytes" : 37471,
+    "firstError" : null
+  }, {
+    "protocol" : "graphql",
+    "protocolLabel" : "GraphQL (HTTP/1.1 + JSON)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 64,
+    "requests" : 54086,
+    "errors" : 0,
+    "throughput" : 10809.042506416365,
+    "throughputMin" : 10194.006515711335,
+    "throughputMax" : 10975.113148626178,
+    "repeats" : 3,
+    "itemsPerSecond" : 1080904.2506416363,
+    "meanMs" : 5.92,
+    "p50Ms" : 5.32,
+    "p90Ms" : 9.07,
+    "p99Ms" : 16.37,
+    "maxMs" : 51.42,
+    "avgPayloadBytes" : 37471,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 1,
+    "requests" : 26641,
+    "errors" : 0,
+    "throughput" : 5328.105337683707,
+    "throughputMin" : 5317.716289573713,
+    "throughputMax" : 5363.722271082336,
+    "repeats" : 3,
+    "itemsPerSecond" : 532810.5337683707,
+    "meanMs" : 0.19,
+    "p50Ms" : 0.17,
+    "p90Ms" : 0.22,
+    "p99Ms" : 0.44,
+    "maxMs" : 5.1,
+    "avgPayloadBytes" : 29320,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 16,
+    "requests" : 117315,
+    "errors" : 0,
+    "throughput" : 23459.68729509256,
+    "throughputMin" : 23287.144683327482,
+    "throughputMax" : 24801.40459601934,
+    "repeats" : 3,
+    "itemsPerSecond" : 2345968.729509256,
+    "meanMs" : 0.68,
+    "p50Ms" : 0.61,
+    "p90Ms" : 0.92,
+    "p99Ms" : 1.99,
+    "maxMs" : 12.24,
+    "avgPayloadBytes" : 29320,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 64,
+    "requests" : 115106,
+    "errors" : 0,
+    "throughput" : 23013.583847739694,
+    "throughputMin" : 21311.56810766307,
+    "throughputMax" : 25935.301598021717,
+    "repeats" : 3,
+    "itemsPerSecond" : 2301358.384773969,
+    "meanMs" : 2.78,
+    "p50Ms" : 2.5,
+    "p90Ms" : 3.73,
+    "p99Ms" : 7.87,
+    "maxMs" : 62.46,
+    "avgPayloadBytes" : 29320,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 1,
+    "requests" : 12637,
+    "errors" : 0,
+    "throughput" : 2527.3310877686963,
+    "throughputMin" : 2195.753090056981,
+    "throughputMax" : 2631.0147328879602,
+    "repeats" : 3,
+    "itemsPerSecond" : 252733.10877686963,
+    "meanMs" : 0.39,
+    "p50Ms" : 0.36,
+    "p90Ms" : 0.44,
+    "p99Ms" : 0.98,
+    "maxMs" : 21.01,
+    "avgPayloadBytes" : 37249,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 16,
+    "requests" : 65026,
+    "errors" : 0,
+    "throughput" : 13002.521912169821,
+    "throughputMin" : 10954.833384535279,
+    "throughputMax" : 13576.235927695165,
+    "repeats" : 3,
+    "itemsPerSecond" : 1300252.1912169822,
+    "meanMs" : 1.23,
+    "p50Ms" : 1.01,
+    "p90Ms" : 1.84,
+    "p99Ms" : 5.11,
+    "maxMs" : 46.56,
+    "avgPayloadBytes" : 37249,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "list",
+    "size" : 100,
+    "concurrency" : 64,
+    "requests" : 73965,
+    "errors" : 0,
+    "throughput" : 14786.027403329907,
+    "throughputMin" : 14724.022037639563,
+    "throughputMax" : 15380.42508617118,
+    "repeats" : 3,
+    "itemsPerSecond" : 1478602.7403329907,
+    "meanMs" : 4.33,
+    "p50Ms" : 3.83,
+    "p90Ms" : 6.58,
+    "p99Ms" : 13.6,
+    "maxMs" : 130.37,
+    "avgPayloadBytes" : 37249,
+    "firstError" : null
+  }, {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 1,
+    "requests" : 1009,
+    "errors" : 0,
+    "throughput" : 201.73931007743573,
+    "throughputMin" : 198.7855267438546,
+    "throughputMax" : 203.54165478465598,
+    "repeats" : 3,
+    "itemsPerSecond" : 201739.31007743574,
+    "meanMs" : 4.96,
+    "p50Ms" : 4.82,
+    "p90Ms" : 5.11,
+    "p99Ms" : 8.39,
+    "maxMs" : 34.98,
+    "avgPayloadBytes" : 382202,
+    "firstError" : null
+  }, {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 16,
+    "requests" : 2735,
+    "errors" : 0,
+    "throughput" : 545.2513154550323,
+    "throughputMin" : 480.59319269738256,
+    "throughputMax" : 551.0034487371641,
+    "repeats" : 3,
+    "itemsPerSecond" : 545251.3154550324,
+    "meanMs" : 29.31,
+    "p50Ms" : 26.46,
+    "p90Ms" : 43.78,
+    "p99Ms" : 77.7,
+    "maxMs" : 176.0,
+    "avgPayloadBytes" : 382202,
+    "firstError" : null
+  }, {
+    "protocol" : "rest",
+    "protocolLabel" : "REST (HTTP/1.1 + JSON, SSE no stream)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 64,
+    "requests" : 3156,
+    "errors" : 0,
+    "throughput" : 624.5762233750174,
+    "throughputMin" : 611.7029072885317,
+    "throughputMax" : 633.5266420754431,
+    "repeats" : 3,
+    "itemsPerSecond" : 624576.2233750174,
+    "meanMs" : 101.97,
+    "p50Ms" : 93.82,
+    "p90Ms" : 165.38,
+    "p99Ms" : 240.0,
+    "maxMs" : 318.72,
+    "avgPayloadBytes" : 382202,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 1,
+    "requests" : 4482,
+    "errors" : 0,
+    "throughput" : 896.2816160767911,
+    "throughputMin" : 801.3306514030324,
+    "throughputMax" : 901.2233450838114,
+    "repeats" : 3,
+    "itemsPerSecond" : 896281.6160767911,
+    "meanMs" : 1.12,
+    "p50Ms" : 1.08,
+    "p90Ms" : 1.2,
+    "p99Ms" : 1.82,
+    "maxMs" : 5.32,
+    "avgPayloadBytes" : 292797,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 16,
+    "requests" : 5822,
+    "errors" : 0,
+    "throughput" : 1161.69386318805,
+    "throughputMin" : 1139.6094858875836,
+    "throughputMax" : 1163.642418472493,
+    "repeats" : 3,
+    "itemsPerSecond" : 1161693.86318805,
+    "meanMs" : 13.76,
+    "p50Ms" : 13.62,
+    "p90Ms" : 16.1,
+    "p99Ms" : 20.34,
+    "maxMs" : 31.84,
+    "avgPayloadBytes" : 292797,
+    "firstError" : null
+  }, {
+    "protocol" : "grpc",
+    "protocolLabel" : "gRPC (HTTP/2 + Protobuf)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 64,
+    "requests" : 5745,
+    "errors" : 0,
+    "throughput" : 1123.5440039456048,
+    "throughputMin" : 1060.8467870113684,
+    "throughputMax" : 1130.6591338722183,
+    "repeats" : 3,
+    "itemsPerSecond" : 1123544.003945605,
+    "meanMs" : 56.52,
+    "p50Ms" : 55.3,
+    "p90Ms" : 62.75,
+    "p99Ms" : 82.94,
+    "maxMs" : 139.52,
+    "avgPayloadBytes" : 292797,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 1,
+    "requests" : 771,
+    "errors" : 0,
+    "throughput" : 154.09250248151486,
+    "throughputMin" : 153.3513697350243,
+    "throughputMax" : 157.91458005578332,
+    "repeats" : 3,
+    "itemsPerSecond" : 154092.50248151485,
+    "meanMs" : 6.49,
+    "p50Ms" : 6.36,
+    "p90Ms" : 6.66,
+    "p99Ms" : 10.42,
+    "maxMs" : 15.16,
+    "avgPayloadBytes" : 374202,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 16,
+    "requests" : 2683,
+    "errors" : 0,
+    "throughput" : 534.1699496847007,
+    "throughputMin" : 473.43327532348303,
+    "throughputMax" : 572.0126616777874,
+    "repeats" : 3,
+    "itemsPerSecond" : 534169.9496847007,
+    "meanMs" : 29.91,
+    "p50Ms" : 27.52,
+    "p90Ms" : 44.67,
+    "p99Ms" : 78.34,
+    "maxMs" : 123.52,
+    "avgPayloadBytes" : 374202,
+    "firstError" : null
+  }, {
+    "protocol" : "websocket",
+    "protocolLabel" : "WebSocket (JSON, 1 conexão por worker)",
+    "scenario" : "stream",
+    "size" : 1000,
+    "concurrency" : 64,
+    "requests" : 2641,
+    "errors" : 0,
+    "throughput" : 515.4020390824917,
+    "throughputMin" : 471.209383618617,
+    "throughputMax" : 532.6345770069676,
+    "repeats" : 3,
+    "itemsPerSecond" : 515402.0390824917,
+    "meanMs" : 122.9,
+    "p50Ms" : 108.42,
+    "p90Ms" : 144.77,
+    "p99Ms" : 227.58,
+    "maxMs" : 5066.75,
+    "avgPayloadBytes" : 374202,
+    "firstError" : null
+  } ]
+};
+  const css = getComputedStyle(document.documentElement);
+  const color = (name) => css.getPropertyValue(`--${name}`).trim();
+  const descriptions = {
+    single: "Buscar 1 produto por id",
+    list: "Listar N produtos numa única resposta",
+    stream: "Receber N produtos como stream de mensagens",
+  };
+
+  Chart.defaults.color = color("muted");
+  Chart.defaults.borderColor = color("grid");
+  Chart.defaults.font.family = "system-ui, -apple-system, sans-serif";
+
+  const env = report.environment;
+  const cfg = report.config;
+  document.getElementById("meta").textContent =
+    `${new Date(report.generatedAt).toLocaleString("pt-BR")} · ${env.java} · ${env.os} · ${env.cpus} CPUs · ` +
+    `load average ${env.loadAverage} · warmup ${cfg.warmup.replace("PT", "").toLowerCase()} · ` +
+    `mediana de ${cfg.repeats} × ${cfg.duration.replace("PT", "").toLowerCase()}`;
+
+  const container = document.getElementById("scenarios");
+  const format = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+  const formatMs = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
+
+  ["single", "list", "stream"].forEach((scenario) => {
+    const rows = report.results.filter((r) => r.scenario === scenario);
+    if (!rows.length) return;
+    const protocols = [...new Set(rows.map((r) => r.protocol))];
+    const concurrencies = [...new Set(rows.map((r) => r.concurrency))].sort((a, b) => a - b);
+
+    const section = document.createElement("section");
+    section.innerHTML = `
+      <h2>${scenario}</h2>
+      <div class="muted">${descriptions[scenario]} · N = ${rows[0].size}</div>
+      <div class="charts">
+        <div class="chart"><h3>Throughput (req/s, maior é melhor)</h3><div class="chart-box"><canvas></canvas></div></div>
+        <div class="chart"><h3>Latência p99 (ms, menor é melhor)</h3><div class="chart-box"><canvas></canvas></div></div>
+        <div class="chart"><h3>Payload médio por resposta (KB)</h3><div class="chart-box"><canvas></canvas></div></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Protocolo</th><th>Concorrência</th><th>req/s</th><th>variação</th><th>itens/s</th><th>p50</th><th>p90</th><th>p99</th><th>max</th><th>payload</th><th>erros</th></tr></thead>
+        <tbody>${rows.map((r) => `
+          <tr>
+            <td><span class="dot" style="background:${color(r.protocol)}"></span>${r.protocolLabel}</td>
+            <td>${r.concurrency}</td>
+            <td>${format.format(r.throughput)}</td>
+            <td>${r.repeats > 1 && r.throughput ? "±" + Math.round(50 * (r.throughputMax - r.throughputMin) / r.throughput) + "%" : "–"}</td>
+            <td>${format.format(r.itemsPerSecond)}</td>
+            <td>${formatMs.format(r.p50Ms)} ms</td>
+            <td>${formatMs.format(r.p90Ms)} ms</td>
+            <td>${formatMs.format(r.p99Ms)} ms</td>
+            <td>${formatMs.format(r.maxMs)} ms</td>
+            <td>${(r.avgPayloadBytes / 1024).toFixed(1)} KB</td>
+            <td class="${r.errors ? "err" : ""}">${r.errors}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table></div>`;
+    container.appendChild(section);
+
+    const [throughputCanvas, latencyCanvas, payloadCanvas] = section.querySelectorAll("canvas");
+    const byConcurrency = (metric) => protocols.map((p) => ({
+      label: p,
+      data: concurrencies.map((c) => rows.find((r) => r.protocol === p && r.concurrency === c)?.[metric] ?? null),
+      backgroundColor: color(p),
+      borderRadius: 3,
+    }));
+    const barOptions = {
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } } },
+      scales: { y: { beginAtZero: true }, x: { grid: { display: false } } },
+    };
+
+    new Chart(throughputCanvas, {
+      type: "bar",
+      data: { labels: concurrencies.map((c) => `c=${c}`), datasets: byConcurrency("throughput") },
+      options: barOptions,
+    });
+    new Chart(latencyCanvas, {
+      type: "bar",
+      data: { labels: concurrencies.map((c) => `c=${c}`), datasets: byConcurrency("p99Ms") },
+      options: barOptions,
+    });
+    new Chart(payloadCanvas, {
+      type: "bar",
+      data: {
+        labels: protocols,
+        datasets: [{
+          data: protocols.map((p) => rows.find((r) => r.protocol === p).avgPayloadBytes / 1024),
+          backgroundColor: protocols.map(color),
+          borderRadius: 3,
+        }],
+      },
+      options: { ...barOptions, plugins: { legend: { display: false } } },
+    });
+  });
+</script>
+</body>
+</html>

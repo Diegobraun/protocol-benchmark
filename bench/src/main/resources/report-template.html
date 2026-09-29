@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protocol Benchmark</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --text: #1d1d1b;
+    --muted: #6b6b66;
+    --border: #e2e2dd;
+    --grid: #ececE7;
+    --rest: #3b6fd8;
+    --graphql: #c2418f;
+    --grpc: #2f9e6b;
+    --websocket: #d9822b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151514;
+      --surface: #1f1f1d;
+      --text: #ecece8;
+      --muted: #9a9a94;
+      --border: #33332f;
+      --grid: #2c2c29;
+      --rest: #6f97ec;
+      --graphql: #e070b3;
+      --grpc: #4cc38a;
+      --websocket: #f0a257;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 0 0 2px; }
+  .muted { color: var(--muted); }
+  .meta { font-size: 13px; margin: 0 0 24px; }
+  section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 16px 0; }
+  .chart h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--muted); }
+  .chart-box { position: relative; height: 240px; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+  .err { color: #d64545; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Protocol Benchmark</h1>
+  <p class="meta muted" id="meta"></p>
+  <div id="scenarios"></div>
+</main>
+<script>
+  const report = __BENCHMARK_DATA__;
+  const css = getComputedStyle(document.documentElement);
+  const color = (name) => css.getPropertyValue(`--${name}`).trim();
+  const descriptions = {
+    single: "Buscar 1 produto por id",
+    list: "Listar N produtos numa única resposta",
+    stream: "Receber N produtos como stream de mensagens",
+  };
+
+  Chart.defaults.color = color("muted");
+  Chart.defaults.borderColor = color("grid");
+  Chart.defaults.font.family = "system-ui, -apple-system, sans-serif";
+
+  const env = report.environment;
+  const cfg = report.config;
+  document.getElementById("meta").textContent =
+    `${new Date(report.generatedAt).toLocaleString("pt-BR")} · ${env.java} · ${env.os} · ${env.cpus} CPUs · ` +
+    `load average ${env.loadAverage} · warmup ${cfg.warmup.replace("PT", "").toLowerCase()} · ` +
+    `mediana de ${cfg.repeats} × ${cfg.duration.replace("PT", "").toLowerCase()}`;
+
+  const container = document.getElementById("scenarios");
+  const format = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+  const formatMs = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
+
+  ["single", "list", "stream"].forEach((scenario) => {
+    const rows = report.results.filter((r) => r.scenario === scenario);
+    if (!rows.length) return;
+    const protocols = [...new Set(rows.map((r) => r.protocol))];
+    const concurrencies = [...new Set(rows.map((r) => r.concurrency))].sort((a, b) => a - b);
+
+    const section = document.createElement("section");
+    section.innerHTML = `
+      <h2>${scenario}</h2>
+      <div class="muted">${descriptions[scenario]} · N = ${rows[0].size}</div>
+      <div class="charts">
+        <div class="chart"><h3>Throughput (req/s, maior é melhor)</h3><div class="chart-box"><canvas></canvas></div></div>
+        <div class="chart"><h3>Latência p99 (ms, menor é melhor)</h3><div class="chart-box"><canvas></canvas></div></div>
+        <div class="chart"><h3>Payload médio por resposta (KB)</h3><div class="chart-box"><canvas></canvas></div></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Protocolo</th><th>Concorrência</th><th>req/s</th><th>variação</th><th>itens/s</th><th>p50</th><th>p90</th><th>p99</th><th>max</th><th>payload</th><th>erros</th></tr></thead>
+        <tbody>${rows.map((r) => `
+          <tr>
+            <td><span class="dot" style="background:${color(r.protocol)}"></span>${r.protocolLabel}</td>
+            <td>${r.concurrency}</td>
+            <td>${format.format(r.throughput)}</td>
+            <td>${r.repeats > 1 && r.throughput ? "±" + Math.round(50 * (r.throughputMax - r.throughputMin) / r.throughput) + "%" : "–"}</td>
+            <td>${format.format(r.itemsPerSecond)}</td>
+            <td>${formatMs.format(r.p50Ms)} ms</td>
+            <td>${formatMs.format(r.p90Ms)} ms</td>
+            <td>${formatMs.format(r.p99Ms)} ms</td>
+            <td>${formatMs.format(r.maxMs)} ms</td>
+            <td>${(r.avgPayloadBytes / 1024).toFixed(1)} KB</td>
+            <td class="${r.errors ? "err" : ""}">${r.errors}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table></div>`;
+    container.appendChild(section);
+
+    const [throughputCanvas, latencyCanvas, payloadCanvas] = section.querySelectorAll("canvas");
+    const byConcurrency = (metric) => protocols.map((p) => ({
+      label: p,
+      data: concurrencies.map((c) => rows.find((r) => r.protocol === p && r.concurrency === c)?.[metric] ?? null),
+      backgroundColor: color(p),
+      borderRadius: 3,
+    }));
+    const barOptions = {
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10 } } },
+      scales: { y: { beginAtZero: true }, x: { grid: { display: false } } },
+    };
+
+    new Chart(throughputCanvas, {
+      type: "bar",
+      data: { labels: concurrencies.map((c) => `c=${c}`), datasets: byConcurrency("throughput") },
+      options: barOptions,
+    });
+    new Chart(latencyCanvas, {
+      type: "bar",
+      data: { labels: concurrencies.map((c) => `c=${c}`), datasets: byConcurrency("p99Ms") },
+      options: barOptions,
+    });
+    new Chart(payloadCanvas, {
+      type: "bar",
+      data: {
+        labels: protocols,
+        datasets: [{
+          data: protocols.map((p) => rows.find((r) => r.protocol === p).avgPayloadBytes / 1024),
+          backgroundColor: protocols.map(color),
+          borderRadius: 3,
+        }],
+      },
+      options: { ...barOptions, plugins: { legend: { display: false } } },
+    });
+  });
+</script>
+</body>
+</html>
