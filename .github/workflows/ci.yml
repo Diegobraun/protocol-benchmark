@@ -18,7 +18,7 @@ jobs:
       - run: ./mvnw -B verify
       - name: Smoke benchmark
         run: ./run-benchmark.sh --concurrency=4 --warmup=1s --duration=2s --out=ci-results
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: benchmark-report
           path: ci-results/
